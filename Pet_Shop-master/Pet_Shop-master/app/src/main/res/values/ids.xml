@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <item name="tvNomProducto" type="id" />
+    <item name="tvDescripcion" type="id" />
+    <item name="cbCarro" type="id" />
+    <item name="tvPrecio" type="id" />
+    <item name="tvTotal" type="id" />
+    <item name="rvListaCarro" type="id" />
+</resources>
