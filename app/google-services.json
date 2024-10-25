@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "332873176323",
+    "project_id": "tiendamascotas-f975b",
+    "storage_bucket": "tiendamascotas-f975b.appspot.com"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:332873176323:android:da1fe1442be6d631af0536",
+        "android_client_info": {
+          "package_name": "com.example.tiendamascotas"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAv8EdlFi3xj8fy1qyzPFLFLgq_nhzttyQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
