@@ -4,9 +4,24 @@ import android.os.Bundle
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.layout.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CenterAlignedTopAppBar
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
@@ -19,6 +34,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
 import com.google.firebase.database.FirebaseDatabase
 
 data class Adopcion(
@@ -26,23 +42,25 @@ data class Adopcion(
     val nombreUsuario: String = "",
     val direccion: String = "",
     val telefono: String = "",
-    val motivo: String = ""
+    val motivo: String = "",
+    val fotoUrl: String = ""  // Agregar campo fotoUrl
 )
 
 class AdoptarMascotaActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         val nombreMascota = intent.getStringExtra("nombreMascota")
+        val fotoUrl = intent.getStringExtra("fotoUrl")
 
         setContent {
-            AdoptarMascotaScreen(nombreMascota ?: "")
+            AdoptarMascotaScreen(nombreMascota ?: "", fotoUrl)
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AdoptarMascotaScreen(nombreMascota: String) {
+fun AdoptarMascotaScreen(nombreMascota: String, fotoUrl: String?) {
     val mContexto = LocalContext.current
 
     // Variables para el formulario
@@ -90,6 +108,17 @@ fun AdoptarMascotaScreen(nombreMascota: String) {
                 )
             )
 
+            // Mostrar la imagen de la mascota si la URL no es nula
+            fotoUrl?.let {
+                AsyncImage(
+                    model = it,
+                    contentDescription = "Foto de la mascota",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(200.dp)
+                )
+            }
+
             // Campo de texto para ingresar nombre del usuario
             OutlinedTextField(
                 value = nombreUsuario,
@@ -134,7 +163,8 @@ fun AdoptarMascotaScreen(nombreMascota: String) {
                             nombreUsuario = nombreUsuario.text,
                             direccion = direccion.text,
                             telefono = telefono.text,
-                            motivo = motivo.text
+                            motivo = motivo.text,
+                            fotoUrl = fotoUrl ?: ""  // Incluir fotoUrl
                         )
                         addAdopcion(adopcion) // Agregar adopción a Firebase
                         Toast.makeText(

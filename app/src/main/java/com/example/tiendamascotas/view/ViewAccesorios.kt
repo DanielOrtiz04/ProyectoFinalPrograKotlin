@@ -1,19 +1,23 @@
 package com.example.tiendamascotas.view
 
-import android.content.Intent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import android.graphics.Bitmap
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.result.launch
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
@@ -21,15 +25,21 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.rememberImagePainter
 import com.example.tiendamascotas.ui.theme.TiendaMascotasTheme
 import com.google.firebase.database.*
+import com.google.firebase.storage.FirebaseStorage
+import java.io.ByteArrayOutputStream
+import java.util.UUID
 
 data class Pet(
+    val id: String = "",
     val name: String = "",
     val species: String = "",
     val age: Int = 0,
     val description: String = "",
-    val adopted: Boolean = false
+    val adopted: Boolean = false,
+    val photoUrl: String = ""
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -37,23 +47,26 @@ data class Pet(
 fun ViewAccesorios() {
     val mContexto = LocalContext.current
     val searchQuery = remember { mutableStateOf(TextFieldValue("")) }
-
-    // Estado mutable para la lista de mascotas
     var mascotas by remember { mutableStateOf(listOf<Pet>()) }
-
-    // Estado para controlar si el diálogo para agregar una nueva mascota está visible
     var mostrarDialogo by remember { mutableStateOf(false) }
-    // Estado para controlar el texto del nuevo nombre de mascota
     var nuevoNombreMascota by remember { mutableStateOf("") }
-    var nuevoEspecieMascota by remember { mutableStateOf("") } // Nueva especie
+    var nuevoEspecieMascota by remember { mutableStateOf("") }
+    var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
+    var capturedImageBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
-    // Filtrar los resultados según la búsqueda
+    val galleryLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        selectedImageUri = uri
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap: Bitmap? ->
+        capturedImageBitmap = bitmap
+    }
+
     val filteredMascotas = mascotas.filter {
         it.name.contains(searchQuery.value.text, ignoreCase = true) ||
                 it.species.contains(searchQuery.value.text, ignoreCase = true)
     }
 
-    // Mostrar el diálogo si está activo
     if (mostrarDialogo) {
         AlertDialog(
             onDismissRequest = { mostrarDialogo = false },
@@ -70,17 +83,30 @@ fun ViewAccesorios() {
                         onValueChange = { nuevoEspecieMascota = it },
                         label = { Text("Especie de mascota") }
                     )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(onClick = { galleryLauncher.launch("image/*") }) {
+                        Text("Seleccionar Foto")
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Button(onClick = { cameraLauncher.launch() }) {
+                        Text("Tomar Foto ")
+                    }
                 }
             },
             confirmButton = {
                 Button(onClick = {
                     if (nuevoNombreMascota.isNotEmpty() && nuevoEspecieMascota.isNotEmpty()) {
-                        val newPet = Pet(name = nuevoNombreMascota, species = nuevoEspecieMascota, age = 0, description = "", adopted = false)
-                        addPet(newPet) // Agrega a la base de datos
-                        mascotas = mascotas + newPet // También agrega a la lista local
-                        nuevoNombreMascota = "" // Limpia el campo de texto
-                        nuevoEspecieMascota = "" // Limpia el campo de especie
-                        mostrarDialogo = false // Cierra el diálogo
+                        val newPet = Pet(name = nuevoNombreMascota, species = nuevoEspecieMascota)
+                        if (selectedImageUri != null) {
+                            addPet(newPet, selectedImageUri = selectedImageUri)
+                        } else if (capturedImageBitmap != null) {
+                            addPet(newPet, capturedBitmap = capturedImageBitmap)
+                        }
+                        nuevoNombreMascota = ""
+                        nuevoEspecieMascota = ""
+                        selectedImageUri = null
+                        capturedImageBitmap = null
+                        mostrarDialogo = false
                     }
                 }) {
                     Text("Agregar")
@@ -94,49 +120,33 @@ fun ViewAccesorios() {
         )
     }
 
-    // Cargar mascotas desde Firebase al iniciar la pantalla
     LaunchedEffect(Unit) {
         fetchPets { fetchedPets ->
             mascotas = fetchedPets
         }
     }
 
-    // Resto de tu código de UI sigue igual...
     Scaffold(
         topBar = {
             TopAppBar(
                 colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
-                    containerColor = Color(0xFF0288D1) // Cambiado a azul
+                    containerColor = Color(0xFF0288D1)
                 ),
                 title = {
                     Box(modifier = Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
                         Text(
                             "Búsqueda de Mascotas",
                             fontWeight = FontWeight.Bold,
-                            color = Color.White // Cambiado a blanco
+                            color = Color.White
                         )
                     }
                 }
             )
         },
-        bottomBar = {
-            BottomAppBar(
-                containerColor = Color(0xFF0288D1), // Fondo azul vibrante
-                contentColor = Color.White, // Texto en blanco
-            ) {
-                Text(
-                    modifier = Modifier.fillMaxWidth(),
-                    textAlign = TextAlign.Center,
-                    text = "Búsqueda filtrada de mascotas",
-                    fontWeight = FontWeight.Bold, // Hacer el texto en negrita
-                    fontSize = 20.sp // Aumentar el tamaño de la fuente
-                )
-            }
-        },
         floatingActionButton = {
             FloatingActionButton(
-                onClick = { mostrarDialogo = true }, // Abre el diálogo al presionar el FAB
-                containerColor = Color(0xFF0288D1), // Color del FAB
+                onClick = { mostrarDialogo = true },
+                containerColor = Color(0xFF0288D1),
             ) {
                 Icon(Icons.Filled.Add, contentDescription = "Agregar nueva mascota", tint = Color.White)
             }
@@ -146,11 +156,10 @@ fun ViewAccesorios() {
             modifier = Modifier
                 .padding(innerPadding)
                 .padding(16.dp)
-                .fillMaxSize(), // Asegúrate de que la columna ocupe el tamaño completo
+                .fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(20.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            // Campo de búsqueda
             TextField(
                 value = searchQuery.value,
                 onValueChange = { searchQuery.value = it },
@@ -158,26 +167,39 @@ fun ViewAccesorios() {
                 label = { Text("Buscar mascota por nombre o especie") }
             )
 
-            // Resultados de búsqueda filtrados
             if (filteredMascotas.isNotEmpty()) {
                 LazyColumn(
                     modifier = Modifier.fillMaxSize()
                 ) {
                     items(filteredMascotas) { mascota ->
-                        Text(
-                            text = "${mascota.name} - ${mascota.species}",
-                            fontSize = 18.sp,
-                            fontWeight = FontWeight.Bold,
+                        Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 8.dp)
-                                .background(
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                                    RoundedCornerShape(8.dp)
+                                .padding(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (mascota.photoUrl.isNotEmpty()) {
+                                Image(
+                                    painter = rememberImagePainter(mascota.photoUrl),
+                                    contentDescription = "Foto de ${mascota.name}",
+                                    modifier = Modifier.size(64.dp)
                                 )
-                                .padding(16.dp),
-                            textAlign = TextAlign.Center
-                        )
+                            }
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "${mascota.name} - ${mascota.species}",
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.weight(1f)
+                            )
+                            IconButton(onClick = { deletePet(mascota.id) }) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Eliminar mascota",
+                                    tint = Color.Red
+                                )
+                            }
+                        }
                     }
                 }
             } else {
@@ -192,7 +214,6 @@ fun ViewAccesorios() {
     }
 }
 
-// Función para cargar mascotas desde Firebase
 fun fetchPets(onPetsFetched: (List<Pet>) -> Unit) {
     val database = FirebaseDatabase.getInstance()
     val petsRef = database.getReference("pets")
@@ -200,32 +221,65 @@ fun fetchPets(onPetsFetched: (List<Pet>) -> Unit) {
     petsRef.addValueEventListener(object : ValueEventListener {
         override fun onDataChange(snapshot: DataSnapshot) {
             val pets = mutableListOf<Pet>()
-            for (petSnapshot in snapshot.children) {
-                val pet = petSnapshot.getValue(Pet::class.java)
+            snapshot.children.forEach { petSnapshot ->
+                val petId = petSnapshot.key ?: return
+                val pet = petSnapshot.getValue(Pet::class.java)?.copy(id = petId)
                 if (pet != null) {
                     pets.add(pet)
                 }
             }
-            onPetsFetched(pets) // Devuelve la lista de mascotas
+            onPetsFetched(pets)
         }
 
         override fun onCancelled(error: DatabaseError) {
-            // Manejar error
+            println("Error fetching pets: ${error.message}")
         }
     })
 }
 
-// Función para agregar una nueva mascota a Firebase
-fun addPet(pet: Pet) {
+fun deletePet(petId: String) {
+    val database = FirebaseDatabase.getInstance()
+    val petRef = database.getReference("pets").child(petId)
+    petRef.removeValue().addOnSuccessListener {
+        println("Mascota eliminada exitosamente")
+    }.addOnFailureListener {
+        println("Error al eliminar la mascota: ${it.message}")
+    }
+}
+
+fun addPet(pet: Pet, selectedImageUri: Uri? = null, capturedBitmap: Bitmap? = null) {
     val database = FirebaseDatabase.getInstance()
     val petsRef = database.getReference("pets")
 
-    petsRef.push().setValue(pet).addOnCompleteListener { task ->
-        if (task.isSuccessful) {
-            // Agregado exitosamente
-        } else {
-            // Manejar error
-        }
+    if (selectedImageUri != null) {
+        val storageRef = FirebaseStorage.getInstance().getReference("pet_images/${UUID.randomUUID()}")
+        storageRef.putFile(selectedImageUri)
+            .addOnSuccessListener {
+                storageRef.downloadUrl.addOnSuccessListener { uri ->
+                    val petWithPhoto = pet.copy(photoUrl = uri.toString())
+                    petsRef.push().setValue(petWithPhoto)
+                }
+            }
+            .addOnFailureListener {
+                println("Error uploading image from gallery: ${it.message}")
+            }
+    } else if (capturedBitmap != null) {
+        val storageRef = FirebaseStorage.getInstance().getReference("pet_images/${UUID.randomUUID()}")
+        val baos = ByteArrayOutputStream()
+        capturedBitmap.compress(Bitmap.CompressFormat.JPEG, 100, baos)
+        val data = baos.toByteArray()
+        storageRef.putBytes(data)
+            .addOnSuccessListener {
+                storageRef.downloadUrl.addOnSuccessListener { uri ->
+                    val petWithPhoto = pet.copy(photoUrl = uri.toString())
+                    petsRef.push().setValue(petWithPhoto)
+                }
+            }
+            .addOnFailureListener {
+                println("Error uploading image from camera: ${it.message}")
+            }
+    } else {
+        petsRef.push().setValue(pet)
     }
 }
 
