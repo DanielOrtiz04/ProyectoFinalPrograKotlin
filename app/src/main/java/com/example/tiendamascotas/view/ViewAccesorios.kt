@@ -39,7 +39,9 @@ data class Pet(
     val age: Int = 0,
     val description: String = "",
     val adopted: Boolean = false,
-    val photoUrl: String = ""
+    val photoUrl: String = "",
+    val location: String = "",
+    val adoptionDate: String = ""
 )
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -51,6 +53,9 @@ fun ViewAccesorios() {
     var mostrarDialogo by remember { mutableStateOf(false) }
     var nuevoNombreMascota by remember { mutableStateOf("") }
     var nuevoEspecieMascota by remember { mutableStateOf("") }
+    var nuevoLugarMascota by remember { mutableStateOf("") }
+    var nuevaFechaMascota by remember { mutableStateOf("") }
+    var nuevaDescripcionMascota by remember { mutableStateOf("") }
     var selectedImageUri by remember { mutableStateOf<Uri?>(null) }
     var capturedImageBitmap by remember { mutableStateOf<Bitmap?>(null) }
 
@@ -81,7 +86,23 @@ fun ViewAccesorios() {
                     TextField(
                         value = nuevoEspecieMascota,
                         onValueChange = { nuevoEspecieMascota = it },
-                        label = { Text("Especie de mascota") }
+                        label = { Text("Raza de mascota") }
+                    )
+                    TextField(
+                        value = nuevoLugarMascota,
+                        onValueChange = { nuevoLugarMascota = it },
+                        label = { Text("Ultima vez visto") }
+                    )
+                    TextField(
+                        value = nuevaFechaMascota,
+                        onValueChange = { nuevaFechaMascota = it },
+                        label = { Text("Fecha") }
+                    )
+                    TextField(
+                        value = nuevaDescripcionMascota,
+                        onValueChange = { nuevaDescripcionMascota = it },
+                        label = { Text("Breve Descripción") },
+                        maxLines = 3
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Button(onClick = { galleryLauncher.launch("image/*") }) {
@@ -96,7 +117,13 @@ fun ViewAccesorios() {
             confirmButton = {
                 Button(onClick = {
                     if (nuevoNombreMascota.isNotEmpty() && nuevoEspecieMascota.isNotEmpty()) {
-                        val newPet = Pet(name = nuevoNombreMascota, species = nuevoEspecieMascota)
+                        val newPet = Pet(
+                            name = nuevoNombreMascota,
+                            species = nuevoEspecieMascota,
+                            description = nuevaDescripcionMascota,
+                            location = nuevoLugarMascota,
+                            adoptionDate = nuevaFechaMascota
+                        )
                         if (selectedImageUri != null) {
                             addPet(newPet, selectedImageUri = selectedImageUri)
                         } else if (capturedImageBitmap != null) {
@@ -104,6 +131,9 @@ fun ViewAccesorios() {
                         }
                         nuevoNombreMascota = ""
                         nuevoEspecieMascota = ""
+                        nuevoLugarMascota = ""
+                        nuevaFechaMascota = ""
+                        nuevaDescripcionMascota = ""
                         selectedImageUri = null
                         capturedImageBitmap = null
                         mostrarDialogo = false
@@ -186,12 +216,33 @@ fun ViewAccesorios() {
                                 )
                             }
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = "${mascota.name} - ${mascota.species}",
-                                fontSize = 18.sp,
-                                fontWeight = FontWeight.Bold,
-                                modifier = Modifier.weight(1f)
-                            )
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = "Nombre: ${mascota.name}",
+                                    fontSize = 18.sp,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = "Especie: ${mascota.species}",
+                                    fontSize = 16.sp,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Text(
+                                    text = "Ultima vez visto: ${mascota.location}",
+                                    fontSize = 14.sp
+                                )
+                                Text(
+                                    text = "Fecha: ${mascota.adoptionDate}",
+                                    fontSize = 14.sp
+                                )
+                                Text(
+                                    text = "Descripción: ${mascota.description}",
+                                    fontSize = 14.sp,
+                                    maxLines = 3
+                                )
+                            }
+
                             IconButton(onClick = { deletePet(mascota.id) }) {
                                 Icon(
                                     imageVector = Icons.Default.Close,
@@ -231,61 +282,49 @@ fun fetchPets(onPetsFetched: (List<Pet>) -> Unit) {
             onPetsFetched(pets)
         }
 
-        override fun onCancelled(error: DatabaseError) {
-            println("Error fetching pets: ${error.message}")
-        }
+        override fun onCancelled(error: DatabaseError) {}
     })
-}
-
-fun deletePet(petId: String) {
-    val database = FirebaseDatabase.getInstance()
-    val petRef = database.getReference("pets").child(petId)
-    petRef.removeValue().addOnSuccessListener {
-        println("Mascota eliminada exitosamente")
-    }.addOnFailureListener {
-        println("Error al eliminar la mascota: ${it.message}")
-    }
 }
 
 fun addPet(pet: Pet, selectedImageUri: Uri? = null, capturedBitmap: Bitmap? = null) {
     val database = FirebaseDatabase.getInstance()
     val petsRef = database.getReference("pets")
+    val petId = petsRef.push().key ?: return
 
     if (selectedImageUri != null) {
-        val storageRef = FirebaseStorage.getInstance().getReference("pet_images/${UUID.randomUUID()}")
-        storageRef.putFile(selectedImageUri)
-            .addOnSuccessListener {
-                storageRef.downloadUrl.addOnSuccessListener { uri ->
-                    val petWithPhoto = pet.copy(photoUrl = uri.toString())
-                    petsRef.push().setValue(petWithPhoto)
-                }
+        val storage = FirebaseStorage.getInstance()
+        val storageRef = storage.reference.child("fotos_mascotas/${UUID.randomUUID()}.jpg")
+        storageRef.putFile(selectedImageUri).addOnSuccessListener {
+            storageRef.downloadUrl.addOnSuccessListener { uri ->
+                petsRef.child(petId).setValue(pet.copy(id = petId, photoUrl = uri.toString()))
             }
-            .addOnFailureListener {
-                println("Error uploading image from gallery: ${it.message}")
-            }
+        }
     } else if (capturedBitmap != null) {
-        val storageRef = FirebaseStorage.getInstance().getReference("pet_images/${UUID.randomUUID()}")
+        val storage = FirebaseStorage.getInstance()
+        val storageRef = storage.reference.child("fotos_mascotas/${UUID.randomUUID()}.jpg")
         val baos = ByteArrayOutputStream()
         capturedBitmap.compress(Bitmap.CompressFormat.JPEG, 100, baos)
         val data = baos.toByteArray()
-        storageRef.putBytes(data)
-            .addOnSuccessListener {
-                storageRef.downloadUrl.addOnSuccessListener { uri ->
-                    val petWithPhoto = pet.copy(photoUrl = uri.toString())
-                    petsRef.push().setValue(petWithPhoto)
-                }
+
+        storageRef.putBytes(data).addOnSuccessListener {
+            storageRef.downloadUrl.addOnSuccessListener { uri ->
+                petsRef.child(petId).setValue(pet.copy(id = petId, photoUrl = uri.toString()))
             }
-            .addOnFailureListener {
-                println("Error uploading image from camera: ${it.message}")
-            }
+        }
     } else {
-        petsRef.push().setValue(pet)
+        petsRef.child(petId).setValue(pet.copy(id = petId))
     }
+}
+
+fun deletePet(petId: String) {
+    val database = FirebaseDatabase.getInstance()
+    val petsRef = database.getReference("pets")
+    petsRef.child(petId).removeValue()
 }
 
 @Preview(showBackground = true)
 @Composable
-fun ViewAccesoriosPreview() {
+fun ViewMascotasPreview() {
     TiendaMascotasTheme {
         ViewAccesorios()
     }
